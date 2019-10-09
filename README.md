@@ -13,9 +13,9 @@ hochgefahren.
   21.08.2019:   V0.3.1  Helligkeitserhöhung und Lautstärkenerhöhung angepasst
   18.09.2019:   V0.3.3  Spotify Playlist eingefügt
   07.10.2019:   V0.3.5  Script generel überarbeitet; Setzen der Zeiten für VIS optimiert; Debugausgabe eingebaut
-
+  
   to do:
-    - Variable mit Anzahl der zu weckenden Personen
-    - Weckzeit aus iCal-Adapter übernehmen
-    - Subscriuption für Weckzeiten um bei Änderungen die Weckzeit neu zu Setzen
-    - Daten zum erstellen des Cron in DPs ablegen
+  - Variable mit Anzahl der zu weckenden Personen
+  - Weckzeit aus iCal-Adapter übernehmen
+  - Subscriuption für Weckzeiten um bei Änderungen die Weckzeit neu zu Setzen
+  - Daten zum erstellen des Cron in DPs ablegen

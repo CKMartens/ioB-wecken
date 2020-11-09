@@ -21,6 +21,7 @@ hochgefahren.
                       + Setzen der Weckzeit nach Verkehr und Dienstplan
 * 09.11.2020  V0.4.1  - Bugfix: Error NaN abfangen
 * 09.11.2020  V0.4.2  + Auswahl einmal/mehrmals am Tag wecken
+* 09.11.2020  V0.4.2  - Fehler bei der Weckzeitberechnung behoben
 
   to do:
    - jedem Benutzer eigene Alexa ID zuordnen 

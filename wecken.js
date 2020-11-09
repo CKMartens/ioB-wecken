@@ -12,9 +12,11 @@ Script zum Wecken per iCal mit Alexa
   08.11.2020    V0.4.0  Script generel überarbeitet; Setzen der Weckzeit nach Verkehr und Dienstplan
   09.11.2020    V0.4.1  Error NaN abfangen
   09.11.2020    V0.4.2  Auswahl einmal/mehrmals am Tag wecken
-
+  09.11.2020    V0.4.3  Fehler bei der Weckzeitberechnung behoben
+  
   to do:
     jedem Benutzer eigene Alexa ID zuordnen
+    alternativ Alexa-Wecker stellen
 
   Author: CKMartens (carsten.martens@outlook.de)
   License: GNU General Public License V3, 29. Juni 2007
@@ -93,6 +95,7 @@ function iCalWecker_stellen (Name) {
     WeckerName = null;
     setState('0_userdata.0.Wecker.' + Name + '.WeckerGesetzt', false);
     if (DEBUG) log('Wecker: Wecker wurde heute für ' + Name + ' schon ausgeführt');
+    return;
   }
 
   if (getState('ical.' + iCal_Instanz + '.events.0.today.' + iCal_Event).val && WeckerAn ) { // Ist heute ein Arbeitsttag und soll der Wecker angeschaltet werden?
@@ -106,15 +109,16 @@ function iCalWecker_stellen (Name) {
     if (!RoadTraffic) {
         TrafficTime = 0
     }
+    
     Weckzeit = Weckzeit + TrafficTime;
-    if (Weckzeit > 59) {
-        Weckzeit = Weckzeit - 60;
-        WeckStd = WeckStd - 1;
-    }
-    WeckMin = WeckMin - Weckzeit;
+
+    let Std = Math.round(Weckzeit / 60);
+    let Min = Weckzeit - Std * 60;
+    WeckStd = WeckStd - Std;
+    WeckMin = WeckMin - Min;
     if (WeckMin < 0) {
-        WeckMin = 60 + WeckMin;
-        WeckStd = WeckStd - 1;
+      WeckMin = 60 + WeckMin;
+      WeckStd = WeckStd - 1;
     }
 
     clearSchedule(WeckerName);                                                  // lösche evtl laufenden Wecker
@@ -128,14 +132,13 @@ function iCalWecker_stellen (Name) {
       let WeckzeitTag = heute.getDate();
       let WeckzeitMonat = heute.getMonth() + 1;
       let WeckzeitStd = ('' + WeckStd);
-      let WeckzeitMin = ('' +WeckMin);
+      let WeckzeitMin = ('' + WeckMin);
 
       Weckzeit = WeckzeitMin + ' ' + WeckzeitStd + ' ' + WeckzeitTag + ' ' + WeckzeitMonat + ' *';
 
       if (DEBUG) log('Wecker: Weckzeit nach iCal für ' + Name + ': ' + WeckzeitStd + ':' + WeckzeitMin + ' Weckcron='+Weckzeit);
 
       setState('0_userdata.0.Wecker.' + Name + '.WeckerGesetzt', true);         // State das der Wecker aktiviert wurde auf true
-      setState('0_userdata.0.Wecker.' + Name + '.WeckerHeute', true);           // State das der Wecker heute gesetzt wurde auf true
 
       WeckerName = schedule(Weckzeit, function() {                              // Neuen Weckcron setzen
           Wecken(Name);
@@ -165,6 +168,7 @@ function Wecken(Name) {
   } else {
     if (DEBUG) log('Wecker: Wecker für ' + Name + ' eingeschaltet, Cron löschen, Wecker starten');
     setState('0_userdata.0.Wecker.' + Name + '.WeckerGesetzt', false);
+    setState('0_userdata.0.Wecker.' + Name + '.WeckerHeute', true);             // State das der Wecker heute schon gestartet wurde auf true
     clearSchedule(WeckerName);
     WeckerName = null;
   }

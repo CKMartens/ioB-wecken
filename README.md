@@ -24,3 +24,4 @@ hochgefahren.
 
   to do:
    - jedem Benutzer eigene Alexa ID zuordnen 
+   - alternativ Alexa-Wecker stellen

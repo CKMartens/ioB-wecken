@@ -17,9 +17,10 @@ hochgefahren.
 * 07.10.2019  V0.3.5  ~ Script generel überarbeitet
                       ~ Setzen der Zeiten für VIS optimiert
                       + Debugausgabe eingebaut
-  
+* 08.11.2020  V0.4.0  ~ Script generel überarbeitet
+                      + Setzen der Weckzeit nach Verkehr und Dienstplan
+* 09.11.2020  V0.4.1  - Bugfix: Error NaN abfangen
+* 09.11.2020  V0.4.2  + Auswahl einmal/mehrmals am Tag wecken
+
   to do:
-  - Variable mit Anzahl der zu weckenden Personen
-  - Weckzeit aus iCal-Adapter übernehmen
-  - Subscriuption für Weckzeiten um bei Änderungen die Weckzeit neu zu Setzen
-  - Daten zum erstellen des Cron in DPs ablegen
+   - jedem Benutzer eigene Alexa ID zuordnen 

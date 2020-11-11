@@ -13,9 +13,10 @@ Script zum Wecken per iCal mit Alexa
   09.11.2020    V0.4.1  Error NaN abfangen
   09.11.2020    V0.4.2  Auswahl einmal/mehrmals am Tag wecken
   09.11.2020    V0.4.3  Fehler bei der Weckzeitberechnung behoben
-  
+  10.11.2020    V0.4.4  jedem Benutzer eigene Alexa ID zuordnen; DPs übersichtlicher restrukturiert
+  11.11.2020    V0.4.5  Bugfix für Cron zum zurücksetzen von State WeckerHeute
+
   to do:
-    jedem Benutzer eigene Alexa ID zuordnen
     alternativ Alexa-Wecker stellen
 
   Author: CKMartens (carsten.martens@outlook.de)
@@ -25,9 +26,9 @@ Script zum Wecken per iCal mit Alexa
 /**
   ##########         Variablen          ##########
 **/
-const EchoDevice = '90F00718642500SQ';                                          // ID des Echo Device über den geweckt werden soll
-const EchoDeviceName = 'Echo Schlafzimmer';                                     // Wie heist der Echo im History Adapter
-const Benutzer = [{'Name':'Elke'}, {'Name':'Carsten'}];                         // Namen der Benutzer
+//const EchoDevice = '90F00718642500SQ';                                          // ID des Echo Device über den geweckt werden soll
+//const EchoDeviceName = 'Echo Schlafzimmer';                                     // Wie heist der Echo im History Adapter
+const Benutzer = [{'Name':'Elke', 'EchoDevice':'90F00718642500SQ'}, {'Name':'Carsten', 'EchoDevice':'90F00718642500SQ'}];                         // Namen der Benutzer
 
 // Informationen mitloggen?
 var DEBUG = true;
@@ -58,6 +59,7 @@ for (var x in Benutzer) {
       [DPPath + 'WeckerHeute', {'name':'Wurde heute schon einmal geweckt?', 'type':'boolean', 'read':true, 'write':true, 'role':'info', 'def':false }],
       [DPPath + 'WeckerMehrmals', {'name':'Soll mehrmals am Tag geweckt werden?', 'type':'boolean', 'read':true, 'write':true, 'role':'info', 'def':false }],
       [DPPath + 'WeckerGesetzt', {'name':'Wecker gesetzt?', 'type':'boolean', 'read':true, 'write':true, 'role':'info', 'def':false }],
+      [DPPath + 'Wecker', {'name':'Wecker um', 'type':'string', 'read':true, 'write':true, 'role':'info', 'def':'01-01-2020 00:00' }],
       [DPPath + 'MusicProvider', {'name':'Welcher Musikanbieter', 'type':'number', 'read':true, 'write':true, 'states': '0:Amazon;1:Spotify;2:TuneIn', 'min':'0', 'max':'2', 'role':'info', 'def':0 }],
       [DPPath + 'Playlist', {'name':'Name der Playlist', 'type':'string', 'read':true, 'write':true, 'role':'info', 'def':'Weg zur Arbeit' }],
       [DPPath + 'LichtAn', {'name':'Licht beim wecken anschalten?', 'type':'boolean', 'read':true, 'write':true, 'role':'info', 'def':false }],
@@ -78,7 +80,7 @@ for (var x in Benutzer) {
    ##### Wecker wird gestellt                                       #####
    ######################################################################
 **/
-function iCalWecker_stellen (Name) {
+function iCalWecker_stellen (Name, EchoDevice) {
   let WeckerName = 'Wecker' + Name;
   let iCal_Event = getState('0_userdata.0.Wecker.' + Name + '.iCal_Event').val;
   let iCal_Instanz = getState('0_userdata.0.Wecker.' + Name + '.iCal_Instanz').val;
@@ -100,16 +102,22 @@ function iCalWecker_stellen (Name) {
 
   if (getState('ical.' + iCal_Instanz + '.events.0.today.' + iCal_Event).val && WeckerAn ) { // Ist heute ein Arbeitsttag und soll der Wecker angeschaltet werden?
     if (DEBUG) log('Wecker: Wecker für ' + Name + ' wird gestellt');
+
     let iCal = getState('ical.' + iCal_Instanz + '.data.text').val;
     let WeckStd = parseFloat(iCal.slice(iCal.indexOf(iCal_Event) - 12, iCal.indexOf(iCal_Event) - 10));
     let WeckMin = parseFloat(iCal.slice(iCal.indexOf(iCal_Event) - 9, iCal.indexOf(iCal_Event) - 7));
+    let WeckDatum = iCal.slice(iCal.indexOf(iCal_Event) - 23, iCal.indexOf(iCal_Event) - 13);
+    let WeckTag = parseFloat(WeckDatum.slice(0, 2));
+    let WeckMonat = parseFloat(WeckDatum.slice(3, 5));
+    let WeckJahr = parseFloat(WeckDatum.slice(6, 10));
+    
     let TrafficTime = Math.ceil(getState('roadtraffic.0.' + RoadTraffic_Name + '.route.duration').val / 60);
     setState('0_userdata.0.Wecker.' + Name + '.RoadTraffic_LastDurration', getState('roadtraffic.0.' + RoadTraffic_Name + '.route.duration').val);
 
     if (!RoadTraffic) {
         TrafficTime = 0
     }
-    
+
     Weckzeit = Weckzeit + TrafficTime;
 
     let Std = Math.round(Weckzeit / 60);
@@ -127,28 +135,41 @@ function iCalWecker_stellen (Name) {
     if (isNaN(WeckMin) || isNaN(WeckStd)) {
       if (DEBUG) log('Wecker: Weckzeit kann nicht gestellt werden, iCal liefert keine Zeiten');
       setState('0_userdata.0.Wecker.' + Name + '.WeckerGesetzt', false);        // State das der Wecker aktiviert wurde auf true
-    } else {
-      const heute = new Date();                                                 // Tag und Monat für Cron ermitteln
-      let WeckzeitTag = heute.getDate();
-      let WeckzeitMonat = heute.getMonth() + 1;
-      let WeckzeitStd = ('' + WeckStd);
-      let WeckzeitMin = ('' + WeckMin);
-
-      Weckzeit = WeckzeitMin + ' ' + WeckzeitStd + ' ' + WeckzeitTag + ' ' + WeckzeitMonat + ' *';
-
-      if (DEBUG) log('Wecker: Weckzeit nach iCal für ' + Name + ': ' + WeckzeitStd + ':' + WeckzeitMin + ' Weckcron='+Weckzeit);
-
-      setState('0_userdata.0.Wecker.' + Name + '.WeckerGesetzt', true);         // State das der Wecker aktiviert wurde auf true
-
-      WeckerName = schedule(Weckzeit, function() {                              // Neuen Weckcron setzen
-          Wecken(Name);
-      });
+      return;
     }
+
+    const heute = new Date();                                                   // Tag und Monat für Cron ermitteln
+    let HeuteTag = heute.getDate();
+    let HeuteMonat = heute.getMonth() + 1;
+    
+    if (HeuteTag != WeckTag || HeuteMonat != WeckMonat) {
+      if (DEBUG) log('Wecker: Weckzeit kann für heute nicht gestellt werden, iCal liefert nur Daten für einen anderen Tag');
+      return;
+    }
+    
+    let WeckzeitStd = ('' + WeckStd);
+    let WeckzeitMin = ('' + WeckMin);
+    let WeckzeitTag = ('' + WeckTag);
+    let WeckzeitMon = ('' + WeckMonat);   
+    let WeckzeitJahr = ('' + WeckJahr);
+    let Datum = WeckzeitTag + '.' + WeckzeitMon + '.' + WeckzeitJahr + ' ' + WeckzeitStd + ':' + WeckzeitMin;
+    let CronDatum = WeckzeitMin + ' ' + WeckzeitStd + ' ' + WeckzeitTag + ' ' + WeckzeitMon + ' *';
+
+    if (DEBUG) log('Wecker: Weckzeit nach iCal für ' + Name + ' für ' + WeckzeitStd + ':' + WeckzeitMin + ' Uhr (CronDatum=' + CronDatum + ')');
+
+    setState('0_userdata.0.Wecker.' + Name + '.WeckerGesetzt', true);         // State das der Wecker aktiviert wurde auf true
+    setState('0_userdata.0.Wecker.' + Name + '.Wecker', Datum);
+
+    WeckerName = schedule(CronDatum, function() {                              // Neuen Weckcron setzen
+        Wecken(Name, EchoDevice);
+    });
+    
   } else {
     clearSchedule(WeckerName);
     WeckerName = null;
     setState('0_userdata.0.Wecker.' + Name + '.WeckerGesetzt', false);
     if (DEBUG) log('Wecker: Weckzeit ' + Name + ' gelöscht');
+    return;
   }
 }
 
@@ -157,7 +178,7 @@ function iCalWecker_stellen (Name) {
    ##### Benutzer wird geweckt                                      #####
    ######################################################################
 **/
-function Wecken(Name) {
+function Wecken(Name, EchoDevice) {
   let WeckerName = 'Wecker'+Name;
   if (DEBUG) log('Wecker: Weckzeit für ' + Name + ' erreicht');
   if (getState('0_userdata.0.Wecker.' + Name + '.WeckerAn').val === false) {     // Wecker ist ausgeschatet
@@ -218,27 +239,33 @@ function Wecken(Name) {
    ##### Subscriptons für Wecker setzen                             #####
    ######################################################################
 **/
-function setSubscriptions(Name) {
+function setSubscriptions(Name, EchoDevice) {
   let RoadTraffic_Name = getState('0_userdata.0.Wecker.' + Name + '.RoadTraffic_Name').val;
   let RoadTraffic = getState('0_userdata.0.Wecker.' + Name + '.RoadTraffic').val;
   let iCal_Instanz = getState('0_userdata.0.Wecker.' + Name + '.iCal_Instanz').val;
 
+  // State WeckerHeute hat sich geändert
+  on({id: '0_userdata.0.Wecker.' + Name + '.WeckerHeute', change: "ne"}, async function (obj) {
+    if (DEBUG) log('Wecker: State WeckerHeute hat sich geändert, Wecker neu stellen');
+    iCalWecker_stellen(Name, EchoDevice);
+  });
+
   // iCal Daten haben sich geändert
   on({id: 'ical.' + iCal_Instanz + '.data.text', change: "ne"}, async function (obj) {
     if (DEBUG) log('Wecker: iCal wurde geändert, Wecker neu stellen');
-    iCalWecker_stellen(Name);
+    iCalWecker_stellen(Name, EchoDevice);
   });
 
   // Wecker wurde an-/ausgeschaltet
   on({id: '0_userdata.0.Wecker.' + Name + '.WeckerAn', change: "ne"}, async function (obj) {
     if (DEBUG) log('Wecker: WeckerAn wurde geändert, Wecker neu stellen');
-    iCalWecker_stellen(Name);
+    iCalWecker_stellen(Name, EchoDevice);
   });
 
   // Weckzeit vor Abfahrt wurde geändert
   on({id: '0_userdata.0.Wecker.' + Name + '.Weckzeit', change: "ne"}, async function (obj) {
     if (DEBUG) log('Wecker: Weckerzeit wurde geändert, Wecker neu stellen');
-    iCalWecker_stellen(Name);
+    iCalWecker_stellen(Name, EchoDevice);
   });
 
   // Fahrzeit hat sich um mind. 5 Minuten geändert
@@ -247,7 +274,7 @@ function setSubscriptions(Name) {
     let RoadTraffic_Durration = getState('roadtraffic.0.' + RoadTraffic_Name + '.route.duration').val
     if ((RoadTraffic_LastDurration - 300) > RoadTraffic_Durration || (RoadTraffic_LastDurration + 300) < RoadTraffic_Durration) {
       if (DEBUG) log('Wecker: Fahrzeit wurde um 5 Minuten geändert, Wecker neu stellen');
-      iCalWecker_stellen(Name);
+      iCalWecker_stellen(Name, EchoDevice);
     }
   });
 
@@ -256,15 +283,14 @@ function setSubscriptions(Name) {
 
 /**
    ######################################################################
-   ##### Wecker stellen nach iCal um 3:05 Uhr                       #####
+   ##### Wecker stellen nach iCal um 0:01 Uhr                       #####
    ######################################################################
 **/
-schedule("5 1 * * *", function () {                                             // Checken ob heute Dienst ist
+schedule("1 0 * * *", function () {                                             // Checken ob heute Dienst ist
   for (var y in Benutzer) {
     let Name = Benutzer[y].Name;
     setState('0_userdata.0.Wecker.' + Name + '.WeckerHeute', false);            // Der Wecker wurde heute noch nicht gesetzt
-    iCalWecker_stellen(Name);
-    if (DEBUG) log('Wecker: Wecker nach iCal werden gesetzt nach Cron');
+    if (DEBUG) log('Wecker: State für WeckerHeute von ' + Name + ' zurückgesetzt');
   }
 });
 
@@ -277,9 +303,10 @@ schedule("5 1 * * *", function () {                                             
 setTimeout(function () {
   for (var y in Benutzer) {
     let Name = Benutzer[y].Name;
-    setSubscriptions(Name);
-    if (DEBUG) log('Wecker: Subscriptinons für ' + Name + ' angelegt');
-    iCalWecker_stellen(Name);
+    let EchoDevice = Benutzer[y].EchoDevice;
+    setSubscriptions(Name, EchoDevice);
+    if (DEBUG) log('Wecker: Subscriptions für ' + Name + ' angelegt');
+    iCalWecker_stellen(Name, EchoDevice);
     if (DEBUG) log('Wecker: Wecker nach iCal werden gesetzt wegen Skriptstart');
   }
 }, 1500);
